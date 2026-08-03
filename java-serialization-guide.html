@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Java Serialization — Field Notes</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg: #0a1c30;
+    --bg-2: #0d2138;
+    --grid: rgba(140,190,220,0.07);
+    --grid-strong: rgba(140,190,220,0.14);
+    --paper: #0f2540;
+    --ink: #dce8f2;
+    --ink-dim: #7f9bb3;
+    --ink-faint: #506a80;
+    --cyan: #6fd8d0;
+    --cyan-soft: rgba(111,216,208,0.12);
+    --amber: #e8a95c;
+    --amber-soft: rgba(232,169,92,0.12);
+    --red: #e88a8a;
+    --line: #1c3a58;
+  }
+
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+
+  body{
+    margin:0;
+    background:
+      linear-gradient(var(--grid) 1px, transparent 1px) 0 0 / 32px 32px,
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 32px 32px,
+      var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    line-height:1.65;
+    font-size:15.5px;
+  }
+
+  ::selection{background:var(--cyan-soft); color:var(--cyan);}
+
+  a{color:var(--cyan); text-decoration:none;}
+
+  /* ---------- layout ---------- */
+  .frame{
+    display:grid;
+    grid-template-columns:260px 1fr;
+    max-width:1240px;
+    margin:0 auto;
+    min-height:100vh;
+  }
+
+  nav{
+    position:sticky; top:0; align-self:start;
+    height:100vh; overflow-y:auto;
+    padding:36px 18px 36px 28px;
+    border-right:1px solid var(--line);
+  }
+  nav::-webkit-scrollbar{width:6px;}
+  nav::-webkit-scrollbar-thumb{background:var(--line); border-radius:3px;}
+
+  .brand{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-faint); margin-bottom:6px;
+  }
+  .brand-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600; font-size:17px; color:var(--ink);
+    margin-bottom:28px; line-height:1.4;
+  }
+  .brand-title span{color:var(--cyan);}
+
+  .navgroup-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-faint); margin:22px 0 8px;
+  }
+  .navgroup-label:first-of-type{margin-top:0;}
+
+  nav a.navlink{
+    display:flex; gap:10px; align-items:baseline;
+    font-size:13.5px; color:var(--ink-dim);
+    padding:6px 8px; border-radius:4px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+  nav a.navlink:hover{color:var(--ink); background:var(--cyan-soft);}
+  nav a.navlink .num{color:var(--ink-faint); font-size:11px; min-width:18px;}
+
+  main{padding:48px 56px 120px;}
+
+  /* ---------- hero ---------- */
+  .hero{
+    padding-bottom:40px; margin-bottom:48px;
+    border-bottom:1px solid var(--line);
+  }
+  .hero-eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--cyan); font-size:12px; letter-spacing:.18em; text-transform:uppercase;
+    margin-bottom:16px; display:flex; align-items:center; gap:10px;
+  }
+  .hero-eyebrow::before{
+    content:''; width:22px; height:1px; background:var(--cyan);
+  }
+  h1.hero-title{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:clamp(32px,4vw,48px);
+    font-weight:700; margin:0 0 18px; line-height:1.15; color:var(--ink);
+  }
+  h1.hero-title em{font-style:normal; color:var(--cyan);}
+  .hero-sub{
+    max-width:620px; color:var(--ink-dim); font-size:16px;
+  }
+
+  /* ---------- stream schematic (signature element) ---------- */
+  .schematic{
+    margin-top:36px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--bg-2);
+    padding:22px 28px 26px;
+  }
+  .schematic-label{
+    display:block; margin:0 0 18px;
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+    letter-spacing:.12em; text-transform:uppercase; color:var(--ink-faint);
+  }
+  .pipe-scroll{
+    overflow-x:auto;
+  }
+  .pipe-row{
+    display:flex; align-items:center; gap:0; min-width:640px;
+  }
+  .pipe-node{
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px;
+    border:1px solid var(--grid-strong);
+    padding:12px 14px; border-radius:4px;
+    color:var(--ink); background:var(--paper);
+    min-width:120px; text-align:center;
+    flex-shrink:0;
+  }
+  .pipe-node.accent{border-color:var(--cyan); color:var(--cyan);}
+  .pipe-node .sub{display:block; color:var(--ink-faint); font-size:10px; margin-top:4px;}
+  .pipe-arrow{
+    flex:1; height:1px; background:
+      repeating-linear-gradient(90deg, var(--grid-strong) 0 6px, transparent 6px 12px);
+    position:relative; min-width:36px;
+  }
+  .pipe-arrow::after{
+    content:'▸'; position:absolute; right:-2px; top:50%; transform:translateY(-50%);
+    color:var(--ink-faint); font-size:12px;
+  }
+
+  /* ---------- sections ---------- */
+  section.topic{margin-bottom:64px; scroll-margin-top:24px;}
+  .topic-head{
+    display:flex; align-items:baseline; gap:14px; margin-bottom:18px;
+  }
+  .topic-num{
+    font-family:'IBM Plex Mono', monospace; color:var(--ink-faint); font-size:14px;
+  }
+  h2{
+    font-family:'IBM Plex Mono', monospace; font-size:22px; margin:0; color:var(--ink);
+    font-weight:600;
+  }
+  h3{
+    font-family:'IBM Plex Mono', monospace; font-size:15px; color:var(--cyan);
+    margin:28px 0 10px; font-weight:600;
+  }
+  p{color:var(--ink-dim); max-width:760px;}
+  strong{color:var(--ink); font-weight:600;}
+
+  code{
+    font-family:'IBM Plex Mono', monospace; background:var(--cyan-soft);
+    color:var(--cyan); padding:1px 5px; border-radius:3px; font-size:.9em;
+  }
+
+  pre{
+    background:var(--paper); border:1px solid var(--line); border-radius:6px;
+    padding:18px 20px; overflow-x:auto; margin:14px 0 20px;
+    font-family:'IBM Plex Mono', monospace; font-size:13px; line-height:1.6;
+  }
+  pre code{background:none; padding:0; color:var(--ink);}
+  .kw{color:#7fb8e8;} .str{color:#a8d989;} .com{color:var(--ink-faint); font-style:italic;} .type{color:var(--cyan);}
+
+  /* ---------- callouts ---------- */
+  .callout{
+    border-left:3px solid var(--cyan); background:var(--cyan-soft);
+    padding:14px 18px; border-radius:0 6px 6px 0; margin:16px 0;
+    max-width:760px;
+  }
+  .callout.warn{border-color:var(--amber); background:var(--amber-soft);}
+  .callout.danger{border-color:var(--red); background:rgba(232,138,138,0.1);}
+  .callout-label{
+    font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--cyan); margin-bottom:6px; display:block;
+  }
+  .callout.warn .callout-label{color:var(--amber);}
+  .callout.danger .callout-label{color:var(--red);}
+  .callout p{margin:0; color:var(--ink); max-width:none;}
+
+  /* ---------- table ---------- */
+  table{
+    border-collapse:collapse; width:100%; max-width:760px; margin:16px 0 24px;
+    font-size:13.5px;
+  }
+  th,td{
+    border:1px solid var(--line); padding:10px 14px; text-align:left;
+    color:var(--ink-dim);
+  }
+  th{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--cyan); background:var(--bg-2); font-weight:600;
+  }
+  tr td:first-child{color:var(--ink); font-family:'IBM Plex Mono', monospace; font-size:12.5px;}
+
+  /* ---------- lifecycle diagram ---------- */
+  .lifecycle{
+    display:flex; flex-wrap:wrap; gap:0; margin:20px 0 28px;
+    border:1px solid var(--line); border-radius:6px; overflow:hidden;
+  }
+  .lc-step{
+    flex:1; min-width:150px; padding:16px 18px; position:relative;
+    border-right:1px solid var(--line);
+    background:var(--bg-2);
+  }
+  .lc-step:last-child{border-right:none;}
+  .lc-step .lc-n{
+    font-family:'IBM Plex Mono', monospace; color:var(--cyan); font-size:11px;
+    display:block; margin-bottom:6px;
+  }
+  .lc-step .lc-t{font-size:12.5px; color:var(--ink); font-weight:600; margin-bottom:4px;}
+  .lc-step .lc-d{font-size:11.5px; color:var(--ink-faint); line-height:1.5;}
+
+  /* ---------- compare grid ---------- */
+  .compare{
+    display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:18px 0 24px; max-width:760px;
+  }
+  .compare-card{
+    border:1px solid var(--line); border-radius:6px; padding:18px 20px; background:var(--bg-2);
+  }
+  .compare-card h4{
+    font-family:'IBM Plex Mono', monospace; font-size:13px; margin:0 0 10px;
+    color:var(--cyan); text-transform:uppercase; letter-spacing:.06em;
+  }
+  .compare-card ul{margin:0; padding-left:18px; color:var(--ink-dim); font-size:13px;}
+  .compare-card li{margin-bottom:6px;}
+
+  @media (max-width:860px){
+    .frame{grid-template-columns:1fr;}
+    nav{position:static; height:auto; border-right:none; border-bottom:1px solid var(--line);}
+    main{padding:32px 24px 80px;}
+    .compare{grid-template-columns:1fr;}
+  }
+
+  footer{
+    padding:32px 56px; border-top:1px solid var(--line);
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-faint);
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <nav>
+    <div class="brand">Field Notes — Ch.8</div>
+    <div class="brand-title">Java<br><span>Serialization</span></div>
+
+    <div class="navgroup-label">Foundations</div>
+    <a class="navlink" href="#basics"><span class="num">01</span>What & Why</a>
+    <a class="navlink" href="#streams"><span class="num">02</span>The Stream Pipeline</a>
+    <a class="navlink" href="#lifecycle"><span class="num">03</span>Write / Read Lifecycle</a>
+
+    <div class="navgroup-label">Controlling the process</div>
+    <a class="navlink" href="#uid"><span class="num">04</span>serialVersionUID</a>
+    <a class="navlink" href="#transient"><span class="num">05</span>transient</a>
+    <a class="navlink" href="#static"><span class="num">06</span>Static Fields</a>
+    <a class="navlink" href="#custom"><span class="num">07</span>Custom Hooks</a>
+
+    <div class="navgroup-label">Structure & inheritance</div>
+    <a class="navlink" href="#graph"><span class="num">08</span>Object Graphs</a>
+    <a class="navlink" href="#inheritance"><span class="num">09</span>Inheritance Rules</a>
+    <a class="navlink" href="#externalizable"><span class="num">10</span>Externalizable</a>
+    <a class="navlink" href="#resolve"><span class="num">11</span>readResolve()</a>
+
+    <div class="navgroup-label">Reality checks</div>
+    <a class="navlink" href="#exceptions"><span class="num">12</span>Exceptions</a>
+    <a class="navlink" href="#limits"><span class="num">13</span>Limitations</a>
+  </nav>
+
+  <main>
+
+    <div class="hero">
+      <div class="hero-eyebrow">Ground Zero — Java I/O</div>
+      <h1 class="hero-title">Flattening objects<br>into <em>byte streams</em></h1>
+      <p class="hero-sub">
+        A working reference on Java Serialization — built from the ground up: what a byte stream
+        actually is, how the stream classes wrap each other, and every knob (<code>transient</code>,
+        <code>serialVersionUID</code>, <code>Externalizable</code>, <code>readResolve()</code>) that
+        controls the process.
+      </p>
+
+      <div class="schematic">
+        <span class="schematic-label">Fig. 1 — write path</span>
+        <div class="pipe-scroll">
+        <div class="pipe-row">
+          <div class="pipe-node accent">Employee<span class="sub">JVM heap object</span></div>
+          <div class="pipe-arrow"></div>
+          <div class="pipe-node">ObjectOutputStream<span class="sub">object → bytes</span></div>
+          <div class="pipe-arrow"></div>
+          <div class="pipe-node">FileOutputStream<span class="sub">bytes → disk</span></div>
+          <div class="pipe-arrow"></div>
+          <div class="pipe-node accent">employee.ser<span class="sub">flat byte stream</span></div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 01 -->
+    <section class="topic" id="basics">
+      <div class="topic-head"><span class="topic-num">01</span><h2>What & Why</h2></div>
+      <p>
+        A Java object in memory is a scattered structure — a type header, field slots, pointers to
+        other objects on the heap. That shape is JVM-specific and can't be copied straight onto disk
+        or across a network wire. A <strong>byte stream</strong> is the opposite: a flat, linear
+        sequence of bytes that any file system, socket, or cache understands natively.
+      </p>
+      <p>
+        <strong>Serialization</strong> is the act of flattening an object graph into that byte
+        stream. <strong>Deserialization</strong> reverses it — rebuilding a live object from the
+        stream, restoring fields and re-wiring references.
+      </p>
+      <div class="callout">
+        <span class="callout-label">Key distinction</span>
+        <p>Converting to bytes is mandatory for any persistence or transmission — that part isn't
+        unique to Java. What's specific to <code>Serializable</code> is the exact byte
+        <em>format</em>: class metadata, field names/types, and object-graph structure, all encoded
+        in a way <code>ObjectInputStream</code> knows how to reverse.</p>
+      </div>
+    </section>
+
+    <!-- 02 -->
+    <section class="topic" id="streams">
+      <div class="topic-head"><span class="topic-num">02</span><h2>The Stream Pipeline</h2></div>
+      <p>
+        Serialization always uses two stream classes stacked together — a low-level transport
+        stream, and a high-level object-conversion stream wrapped around it.
+      </p>
+
+      <div class="compare">
+        <div class="compare-card">
+          <h4>FileOutputStream</h4>
+          <ul>
+            <li>Low-level — writes raw bytes to disk</li>
+            <li>No concept of "objects"</li>
+            <li>Just a pipe from program → file</li>
+          </ul>
+        </div>
+        <div class="compare-card">
+          <h4>ObjectOutputStream</h4>
+          <ul>
+            <li>High-level — converts an object into bytes</li>
+            <li>Cannot write to disk on its own</li>
+            <li>Needs an underlying stream to hand bytes to</li>
+          </ul>
+        </div>
+      </div>
+
+      <pre><code><span class="kw">FileOutputStream</span> fos = <span class="kw">new</span> FileOutputStream(<span class="str">"employee.ser"</span>); <span class="com">// knows disk I/O</span>
+<span class="kw">ObjectOutputStream</span> oos = <span class="kw">new</span> ObjectOutputStream(fos);          <span class="com">// knows object → bytes</span>
+oos.writeObject(emp);</code></pre>
+
+      <p>
+        This is Java's I/O <strong>decorator pattern</strong> — <code>ObjectOutputStream</code>
+        doesn't care where bytes end up, only that it's handed <em>some</em> <code>OutputStream</code>.
+        Swap the file stream for a socket stream or a <code>ByteArrayOutputStream</code> and the exact
+        same serialization logic now targets a network or memory buffer instead.
+      </p>
+
+      <table>
+        <tr><th>Write side</th><th>Read side</th><th>Job</th></tr>
+        <tr><td>FileOutputStream</td><td>FileInputStream</td><td>Raw byte transport (disk)</td></tr>
+        <tr><td>ObjectOutputStream</td><td>ObjectInputStream</td><td>Object ⇄ byte conversion</td></tr>
+      </table>
+    </section>
+
+    <!-- 03 -->
+    <section class="topic" id="lifecycle">
+      <div class="topic-head"><span class="topic-num">03</span><h2>Write / Read Lifecycle</h2></div>
+      <p>Tracing exactly what happens, and when — construction time vs. call time.</p>
+
+      <h3>Write side</h3>
+      <div class="lifecycle">
+        <div class="lc-step"><span class="lc-n">01</span><div class="lc-t">new FileOutputStream()</div><div class="lc-d">Opens the file. Nothing written yet.</div></div>
+        <div class="lc-step"><span class="lc-n">02</span><div class="lc-t">new ObjectOutputStream()</div><div class="lc-d">Writes the stream header (magic number + version) immediately.</div></div>
+        <div class="lc-step"><span class="lc-n">03</span><div class="lc-t">writeObject(emp)</div><div class="lc-d">Class metadata + field values are serialized and pushed to disk.</div></div>
+      </div>
+
+      <h3>Read side</h3>
+      <div class="lifecycle">
+        <div class="lc-step"><span class="lc-n">01</span><div class="lc-t">new FileInputStream()</div><div class="lc-d">Opens the file for reading. No content read yet.</div></div>
+        <div class="lc-step"><span class="lc-n">02</span><div class="lc-t">new ObjectInputStream()</div><div class="lc-d">Reads &amp; validates the stream header. Bad header → StreamCorruptedException here.</div></div>
+        <div class="lc-step"><span class="lc-n">03</span><div class="lc-t">readObject()</div><div class="lc-d">Reads metadata + fields, reconstructs the object, returns it.</div></div>
+      </div>
+
+      <div class="callout warn">
+        <span class="callout-label">Constructors don't run</span>
+        <p>Deserialization allocates the object directly and populates fields from the stream —
+        your class's normal constructors are <strong>never called</strong>. Any logging or
+        validation inside a constructor is silently skipped. (<code>Externalizable</code> is the one
+        exception — see §10.)</p>
+      </div>
+    </section>
+
+    <!-- 04 -->
+    <section class="topic" id="uid">
+      <div class="topic-head"><span class="topic-num">04</span><h2>serialVersionUID</h2></div>
+      <p>
+        A fingerprint of a class's shape, used to check compatibility between the class that wrote
+        the data and the class trying to read it back.
+      </p>
+
+      <pre><code><span class="kw">private static final</span> <span class="type">long</span> serialVersionUID = 1L;</code></pre>
+
+      <p>Every part of this declaration is load-bearing — get any piece wrong and Java silently
+      ignores your field and falls back to auto-generation:</p>
+      <table>
+        <tr><th>Piece</th><th>Requirement</th></tr>
+        <tr><td>Name</td><td>Exactly <code>serialVersionUID</code>, case-sensitive</td></tr>
+        <tr><td>Type</td><td><code>long</code></td></tr>
+        <tr><td>static / final</td><td>Both required (by contract / convention)</td></tr>
+        <tr><td>private</td><td>Recommended — each class owns its own UID</td></tr>
+      </table>
+
+      <h3>If you don't declare it</h3>
+      <p>Java auto-generates one via SHA-1 over the class name, fields, methods, and interfaces —
+      then any structural change (even adding one harmless field) produces a <em>different</em>
+      auto-generated UID.</p>
+
+      <div class="callout danger">
+        <span class="callout-label">Failure mode</span>
+        <p>Serialize with UID <code>A</code> → modify the class → Java now auto-generates UID
+        <code>B</code> → deserializing the old file throws
+        <code>InvalidClassException: local class incompatible</code> — even though the change was
+        harmless.</p>
+      </div>
+
+      <h3>Once declared, treat it as stable</h3>
+      <table>
+        <tr><th>Change</th><th>Bump the UID?</th></tr>
+        <tr><td>Added a new field</td><td>No</td></tr>
+        <tr><td>Added a new method</td><td>No</td></tr>
+        <tr><td>Changed a field's type incompatibly</td><td>Yes</td></tr>
+        <tr><td>Intentionally invalidating old data</td><td>Yes</td></tr>
+      </table>
+      <p>
+        It's scoped <em>per class</em> — <code>Employee</code> and <code>Product</code> can both
+        happily declare <code>1L</code>; the class name travels with the UID in the stream, so
+        there's never cross-class confusion.
+      </p>
+    </section>
+
+    <!-- 05 -->
+    <section class="topic" id="transient">
+      <div class="topic-head"><span class="topic-num">05</span><h2>transient</h2></div>
+      <p>Marks a field to be <strong>skipped entirely</strong> during serialization.</p>
+      <pre><code><span class="kw">class</span> Employee <span class="kw">implements</span> Serializable {
+    <span class="kw">private</span> String name;
+    <span class="kw">private transient</span> String password; <span class="com">// never written to the stream</span>
+}</code></pre>
+      <p>On deserialization, a <code>transient</code> field comes back at its default value —
+      <code>null</code> for objects, <code>0</code>/<code>false</code> for primitives. Typical uses:
+      passwords/tokens, non-serializable types like <code>Thread</code> or <code>Socket</code>, or
+      derived data you'd rather just recompute.</p>
+    </section>
+
+    <!-- 06 -->
+    <section class="topic" id="static">
+      <div class="topic-head"><span class="topic-num">06</span><h2>Static Fields</h2></div>
+      <p>
+        Never serialized — they belong to the <strong>class</strong>, not the instance, so
+        serialization (which only captures instance state) never touches them.
+      </p>
+      <pre><code><span class="kw">class</span> Parent <span class="kw">implements</span> Serializable {
+    <span class="kw">static</span> String staticField = <span class="str">"Original"</span>;
+}
+<span class="com">// serialize a Child instance, then change Parent.staticField...
+// deserializing later reflects whatever the CURRENT static value is,
+// not the value at serialization time.</span></code></pre>
+    </section>
+
+    <!-- 07 -->
+    <section class="topic" id="custom">
+      <div class="topic-head"><span class="topic-num">07</span><h2>Custom Hooks</h2></div>
+      <p>Override the default read/write behavior without abandoning <code>Serializable</code>
+      entirely — these private methods are picked up automatically via reflection.</p>
+      <pre><code><span class="kw">private void</span> writeObject(ObjectOutputStream out) <span class="kw">throws</span> IOException {
+    out.defaultWriteObject();  <span class="com">// normal serialization first</span>
+    <span class="com">// then custom logic — e.g. encrypt a field</span>
+}
+
+<span class="kw">private void</span> readObject(ObjectInputStream in) <span class="kw">throws</span> IOException, ClassNotFoundException {
+    in.defaultReadObject();    <span class="com">// normal deserialization first</span>
+    <span class="com">// then custom logic — e.g. decrypt a field</span>
+}</code></pre>
+    </section>
+
+    <!-- 08 -->
+    <section class="topic" id="graph">
+      <div class="topic-head"><span class="topic-num">08</span><h2>Object Graphs</h2></div>
+      <p>Any referenced object must also be <code>Serializable</code>, or serialization fails with
+      <code>NotSerializableException</code>.</p>
+      <pre><code><span class="kw">class</span> Address <span class="kw">implements</span> Serializable { String city; }
+
+<span class="kw">class</span> Employee <span class="kw">implements</span> Serializable {
+    String name;
+    Address address; <span class="com">// must be Serializable too</span>
+}</code></pre>
+      <p>Shared references inside the graph are preserved — if two fields point to the <em>same</em>
+      nested object, deserialization rebuilds one shared instance, not two separate copies.</p>
+    </section>
+
+    <!-- 09 -->
+    <section class="topic" id="inheritance">
+      <div class="topic-head"><span class="topic-num">09</span><h2>Inheritance Rules</h2></div>
+      <p>If a superclass is <strong>not</strong> <code>Serializable</code> but the subclass is:</p>
+      <pre><code><span class="kw">class</span> Parent {                    <span class="com">// NOT Serializable</span>
+    <span class="type">int</span> parentField = 10;
+    Parent() { System.out.println(<span class="str">"Parent constructor ran"</span>); }
+}
+<span class="kw">class</span> Child <span class="kw">extends</span> Parent <span class="kw">implements</span> Serializable {
+    <span class="type">int</span> childField = 20;
+}</code></pre>
+      <div class="callout">
+        <span class="callout-label">What actually happens</span>
+        <p>Subclass fields are serialized normally. The superclass's fields are <strong>not</strong>
+        — instead, the superclass's <strong>no-arg constructor runs</strong> during deserialization
+        to initialize it. No no-arg constructor on the superclass → runtime failure.</p>
+      </div>
+    </section>
+
+    <!-- 10 -->
+    <section class="topic" id="externalizable">
+      <div class="topic-head"><span class="topic-num">10</span><h2>Externalizable</h2></div>
+      <p>Full manual control — you write and read every field yourself.</p>
+      <pre><code><span class="kw">class</span> Employee <span class="kw">implements</span> Externalizable {
+    <span class="kw">private</span> String name;
+    <span class="kw">private</span> <span class="type">int</span> age;
+
+    <span class="kw">public</span> Employee() {}  <span class="com">// REQUIRED no-arg constructor</span>
+
+    <span class="kw">public void</span> writeExternal(ObjectOutput out) <span class="kw">throws</span> IOException {
+        out.writeUTF(name);
+        out.writeInt(age);
+    }
+    <span class="kw">public void</span> readExternal(ObjectInput in) <span class="kw">throws</span> IOException {
+        name = in.readUTF();
+        age = in.readInt();  <span class="com">// must match write order exactly</span>
+    }
+}</code></pre>
+
+      <div class="compare">
+        <div class="compare-card">
+          <h4>Serializable</h4>
+          <ul>
+            <li>Automatic, reflection-based</li>
+            <li>No-arg constructor not required</li>
+            <li>Slower, larger output (field metadata)</li>
+          </ul>
+        </div>
+        <div class="compare-card">
+          <h4>Externalizable</h4>
+          <ul>
+            <li>Fully manual read/write</li>
+            <li>Public no-arg constructor required</li>
+            <li>Faster, smaller, exact byte control</li>
+          </ul>
+        </div>
+      </div>
+      <p>Note the one exception to §03's rule: for <code>Externalizable</code>, the no-arg
+      constructor <em>is</em> called before <code>readExternal()</code> populates the fields.</p>
+    </section>
+
+    <!-- 11 -->
+    <section class="topic" id="resolve">
+      <div class="topic-head"><span class="topic-num">11</span><h2>readResolve()</h2></div>
+      <p>Swaps the freshly deserialized object for another instance — the standard way to keep a
+      Singleton a singleton across deserialization.</p>
+      <pre><code><span class="kw">public class</span> Singleton <span class="kw">implements</span> Serializable {
+    <span class="kw">private static final</span> Singleton INSTANCE = <span class="kw">new</span> Singleton();
+    <span class="kw">private</span> Singleton() {}
+    <span class="kw">public static</span> Singleton getInstance() { <span class="kw">return</span> INSTANCE; }
+
+    <span class="kw">protected</span> Object readResolve() {
+        <span class="kw">return</span> INSTANCE; <span class="com">// discard the newly built copy</span>
+    }
+}</code></pre>
+      <p>Without it, deserialization bypasses constructors and builds a second, separate "singleton"
+      instance — breaking the identity guarantee (<code>deserialized == getInstance()</code> would
+      be <code>false</code>).</p>
+    </section>
+
+    <!-- 12 -->
+    <section class="topic" id="exceptions">
+      <div class="topic-head"><span class="topic-num">12</span><h2>Exceptions</h2></div>
+      <table>
+        <tr><th>Exception</th><th>Trigger</th></tr>
+        <tr><td>NotSerializableException</td><td>A field's type doesn't implement Serializable</td></tr>
+        <tr><td>InvalidClassException</td><td>serialVersionUID mismatch between stream and class</td></tr>
+        <tr><td>ClassNotFoundException</td><td>Class of the serialized object isn't on the classpath</td></tr>
+        <tr><td>StreamCorruptedException</td><td>The stream header / byte format is malformed</td></tr>
+      </table>
+      <p>Always use <em>try-with-resources</em> — an exception mid-write can leave a corrupt,
+      unusable file behind if streams aren't closed cleanly.</p>
+      <pre><code><span class="kw">try</span> (ObjectOutputStream out = <span class="kw">new</span> ObjectOutputStream(<span class="kw">new</span> FileOutputStream(<span class="str">"data.ser"</span>))) {
+    out.writeObject(myObject);
+} <span class="kw">catch</span> (IOException e) {
+    e.printStackTrace();
+}</code></pre>
+    </section>
+
+    <!-- 13 -->
+    <section class="topic" id="limits">
+      <div class="topic-head"><span class="topic-num">13</span><h2>Limitations</h2></div>
+      <p>Why native Java serialization is rarely the production choice today:</p>
+      <table>
+        <tr><th>Issue</th><th>Detail</th></tr>
+        <tr><td>Security</td><td>Deserializing untrusted data is a known remote-code-execution vector</td></tr>
+        <tr><td>Not cross-language</td><td>Byte format is Java-specific — unreadable by Python, Go, etc.</td></tr>
+        <tr><td>Fragile versioning</td><td>Schema evolution requires careful UID management</td></tr>
+        <tr><td>Verbose output</td><td>Class metadata bloats the byte stream vs. a tighter format</td></tr>
+      </table>
+      <p>Common production alternatives: <strong>JSON</strong> (Jackson/Gson), <strong>Protocol
+      Buffers</strong>, <strong>Avro</strong>, <strong>Kryo</strong>.</p>
+    </section>
+
+  </main>
+</div>
+
+<footer>JAVA SERIALIZATION — FIELD NOTES · CH.8</footer>
+
+</body>
+</html>
