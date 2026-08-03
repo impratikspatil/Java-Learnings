@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Java Memory Management — Field Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0e1512;
+    --bg-panel: #131b17;
+    --bg-panel-raised: #17211c;
+    --line: #263229;
+    --text: #e9ede8;
+    --text-dim: #9fb0a4;
+    --text-faint: #6b7d70;
+    --heap: #e8a33d;       /* warm amber = heap / objects */
+    --heap-dim: #7a5a26;
+    --stack: #49b8ae;      /* cool teal = stack / frames */
+    --stack-dim: #2b5f59;
+    --danger: #d9695f;
+    --young: #e8c15f;
+    --old: #c9722f;
+    --meta: #7a93c9;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    line-height:1.6;
+    font-size:16px;
+  }
+  ::selection{ background:var(--heap-dim); color:#fff; }
+
+  h1,h2,h3,h4{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    letter-spacing:-0.01em;
+    color:#fff;
+    margin:0 0 0.4em 0;
+  }
+  code, .mono, pre{
+    font-family:'JetBrains Mono', monospace;
+  }
+  a{ color:var(--stack); }
+
+  /* ---------- Layout shell ---------- */
+  .shell{
+    display:grid;
+    grid-template-columns: 280px 1fr;
+    min-height:100vh;
+  }
+  nav.toc{
+    position:sticky; top:0; height:100vh; overflow-y:auto;
+    border-right:1px solid var(--line);
+    background:var(--bg-panel);
+    padding:28px 20px 60px;
+  }
+  nav.toc .brand{
+    font-family:'Fraunces', serif;
+    font-size:1.1rem;
+    color:#fff;
+    margin-bottom:2px;
+  }
+  nav.toc .brand-sub{
+    font-size:0.72rem;
+    color:var(--text-faint);
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    margin-bottom:24px;
+  }
+  nav.toc .group-label{
+    font-size:0.68rem;
+    text-transform:uppercase;
+    letter-spacing:0.09em;
+    color:var(--text-faint);
+    margin:20px 0 8px;
+  }
+  nav.toc ul{ list-style:none; margin:0; padding:0; }
+  nav.toc li a{
+    display:block;
+    padding:6px 10px;
+    border-radius:6px;
+    color:var(--text-dim);
+    text-decoration:none;
+    font-size:0.86rem;
+    border-left:2px solid transparent;
+    transition:background .15s, color .15s, border-color .15s;
+  }
+  nav.toc li a:hover{ background:var(--bg-panel-raised); color:var(--text); }
+  nav.toc li a.active{
+    color:var(--heap);
+    border-left-color:var(--heap);
+    background:var(--bg-panel-raised);
+  }
+  nav.toc li a .qnum{ color:var(--text-faint); margin-right:6px; font-family:'JetBrains Mono', monospace; font-size:0.78em; }
+
+  main{ padding: 0; }
+
+  /* ---------- Hero ---------- */
+  .hero{
+    padding:80px 64px 60px;
+    border-bottom:1px solid var(--line);
+    position:relative;
+    overflow:hidden;
+  }
+  .hero .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--heap);
+    font-size:0.82rem;
+    letter-spacing:0.12em;
+    text-transform:uppercase;
+    margin-bottom:18px;
+  }
+  .hero h1{
+    font-size:clamp(2.2rem, 4vw, 3.4rem);
+    max-width:820px;
+    line-height:1.08;
+  }
+  .hero h1 em{
+    font-style:italic;
+    color:var(--heap);
+  }
+  .hero p.lede{
+    max-width:640px;
+    color:var(--text-dim);
+    font-size:1.05rem;
+    margin-top:20px;
+  }
+  .hero .stat-row{
+    display:flex; gap:36px; margin-top:40px; flex-wrap:wrap;
+  }
+  .hero .stat b{
+    display:block; font-family:'Fraunces', serif; font-size:1.8rem; color:#fff;
+  }
+  .hero .stat span{
+    font-size:0.78rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.06em;
+  }
+
+  /* ---------- Sections ---------- */
+  section.chapter{
+    padding:56px 64px;
+    border-bottom:1px solid var(--line);
+    max-width:980px;
+  }
+  section.chapter .kicker{
+    display:flex; align-items:baseline; gap:14px; margin-bottom:6px;
+  }
+  section.chapter .kicker .num{
+    font-family:'JetBrains Mono', monospace;
+    color:var(--heap);
+    font-size:0.95rem;
+  }
+  section.chapter .kicker .tag{
+    font-size:0.72rem;
+    text-transform:uppercase;
+    letter-spacing:0.08em;
+    color:var(--text-faint);
+    border:1px solid var(--line);
+    padding:2px 8px;
+    border-radius:20px;
+  }
+  section.chapter h2{ font-size:1.7rem; margin-top:4px; }
+  section.chapter .subtitle{
+    color:var(--text-dim);
+    margin-bottom:26px;
+    font-size:0.98rem;
+  }
+  section.chapter p{ color:#d7ddd6; }
+  section.chapter h4{
+    color:var(--heap);
+    font-size:1rem;
+    margin-top:26px;
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+  }
+
+  pre{
+    background:#0a100d;
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-size:0.86rem;
+    color:#d5e6da;
+    margin:14px 0;
+  }
+  pre .c1{ color:var(--text-faint); font-style:italic; }
+  code.inline{
+    background:#0a100d;
+    border:1px solid var(--line);
+    padding:1px 6px;
+    border-radius:5px;
+    font-size:0.88em;
+    color:var(--young);
+  }
+
+  table{
+    width:100%;
+    border-collapse:collapse;
+    margin:18px 0;
+    font-size:0.9rem;
+  }
+  th,td{
+    text-align:left;
+    padding:10px 14px;
+    border-bottom:1px solid var(--line);
+  }
+  th{
+    color:var(--text-faint);
+    text-transform:uppercase;
+    font-size:0.72rem;
+    letter-spacing:0.06em;
+    font-weight:500;
+  }
+  td{ color:#d7ddd6; }
+  tr:last-child td{ border-bottom:none; }
+
+  .callout{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-left:3px solid var(--stack);
+    border-radius:8px;
+    padding:16px 20px;
+    margin:20px 0;
+    font-size:0.92rem;
+    color:var(--text-dim);
+  }
+  .callout.warn{ border-left-color:var(--danger); }
+  .callout b{ color:#fff; }
+
+  .diagram{
+    background:var(--bg-panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px;
+    margin:22px 0;
+  }
+  .diagram .cap{
+    font-size:0.78rem;
+    color:var(--text-faint);
+    margin-top:10px;
+    text-align:center;
+  }
+  .two-col{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+  }
+  @media (max-width:900px){ .two-col{ grid-template-columns:1fr; } }
+
+  .chip{
+    display:inline-block;
+    font-family:'JetBrains Mono', monospace;
+    font-size:0.75rem;
+    padding:2px 8px;
+    border-radius:5px;
+    margin-right:6px;
+  }
+  .chip.heap{ background:rgba(232,163,61,0.15); color:var(--heap); }
+  .chip.stack{ background:rgba(73,184,174,0.15); color:var(--stack); }
+  .chip.meta{ background:rgba(122,147,201,0.15); color:var(--meta); }
+
+  footer{
+    padding:50px 64px 90px;
+    color:var(--text-faint);
+    font-size:0.85rem;
+    max-width:980px;
+  }
+
+  @media (max-width: 860px){
+    .shell{ grid-template-columns: 1fr; }
+    nav.toc{ position:relative; height:auto; }
+    .hero, section.chapter, footer{ padding-left:24px; padding-right:24px; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <nav class="toc" id="toc">
+    <div class="brand">Memory Map</div>
+    <div class="brand-sub">Java Memory Management — Ch.10</div>
+
+    <div class="group-label">Foundations</div>
+    <ul>
+      <li><a href="#foundations"><span class="qnum">§0</span>Stack, Heap &amp; JVM Areas</a></li>
+      <li><a href="#new-keyword"><span class="qnum">Q130</span>What happens on <code>new</code></a></li>
+    </ul>
+
+    <div class="group-label">Strings &amp; References</div>
+    <ul>
+      <li><a href="#strings"><span class="qnum">Q126</span>String representation</a></li>
+      <li><a href="#references"><span class="qnum">Q129</span>Strong/Soft/Weak/Phantom</a></li>
+    </ul>
+
+    <div class="group-label">Object Lifecycle</div>
+    <ul>
+      <li><a href="#finalize"><span class="qnum">Q127</span>Resurrection &amp; finalize()</a></li>
+      <li><a href="#try-with-resources"><span class="qnum"> </span>try-with-resources</a></li>
+    </ul>
+
+    <div class="group-label">Garbage Collectors</div>
+    <ul>
+      <li><a href="#gc-defaults"><span class="qnum">Q128</span>Defaults per version</a></li>
+      <li><a href="#gc-types"><span class="qnum">Q131</span>Collector types</a></li>
+    </ul>
+
+    <div class="group-label">Memory Areas</div>
+    <ul>
+      <li><a href="#memory-areas"><span class="qnum">Q134</span>Areas of memory</a></li>
+      <li><a href="#allocation"><span class="qnum">Q135</span>How allocation happens</a></li>
+      <li><a href="#metaspace"><span class="qnum">Q137</span>Metaspace vs PermGen</a></li>
+    </ul>
+
+    <div class="group-label">Leaks &amp; Monitoring</div>
+    <ul>
+      <li><a href="#leaks"><span class="qnum">Q136</span>Memory leaks</a></li>
+      <li><a href="#monitoring"><span class="qnum">Q138</span>Monitoring GC</a></li>
+      <li><a href="#heap-size"><span class="qnum">Q139</span>Is heap fixed?</a></li>
+    </ul>
+
+    <div class="group-label">Reading GC Logs</div>
+    <ul>
+      <li><a href="#gc-log-parnew"><span class="qnum">Q140</span>ParNew log</a></li>
+      <li><a href="#gc-log-g1"><span class="qnum">Q141</span>G1 mixed pause</a></li>
+    </ul>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <div class="eyebrow">Chapter 10 — Field Reference</div>
+      <h1>How Java remembers, <em>and forgets.</em></h1>
+      <p class="lede">A working map of the JVM's memory model — where objects live, who cleans up after them, and how to read the evidence they leave behind in a GC log.</p>
+      <div class="stat-row">
+        <div class="stat"><b>2</b><span>Core regions: stack &amp; heap</span></div>
+        <div class="stat"><b>4</b><span>Reference strengths</span></div>
+        <div class="stat"><b>6</b><span>Garbage collectors compared</span></div>
+        <div class="stat"><b>16</b><span>Interview questions covered</span></div>
+      </div>
+    </div>
+
+    <!-- ============ FOUNDATIONS ============ -->
+    <section class="chapter" id="foundations">
+      <div class="kicker"><span class="num">§0</span><span class="tag">Foundations</span></div>
+      <h2>Stack vs. Heap, at a glance</h2>
+      <p class="subtitle">Every other question in this chapter is a variation on this one picture.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 760 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+          <!-- Stack side -->
+          <rect x="20" y="20" width="280" height="260" rx="10" fill="none" stroke="#2b5f59" stroke-width="1.5"/>
+          <text x="160" y="46" text-anchor="middle" fill="#49b8ae" font-family="JetBrains Mono, monospace" font-size="13" font-weight="600">THREAD STACK</text>
+
+          <rect x="40" y="60" width="240" height="52" rx="6" fill="rgba(73,184,174,0.12)" stroke="#49b8ae" stroke-width="1"/>
+          <text x="160" y="80" text-anchor="middle" fill="#e9ede8" font-family="JetBrains Mono, monospace" font-size="11">frame: main()</text>
+          <text x="160" y="98" text-anchor="middle" fill="#9fb0a4" font-family="JetBrains Mono, monospace" font-size="10">Person p = [ref]</text>
+
+          <rect x="40" y="122" width="240" height="52" rx="6" fill="rgba(73,184,174,0.12)" stroke="#49b8ae" stroke-width="1"/>
+          <text x="160" y="142" text-anchor="middle" fill="#e9ede8" font-family="JetBrains Mono, monospace" font-size="11">frame: createPerson()</text>
+          <text x="160" y="160" text-anchor="middle" fill="#9fb0a4" font-family="JetBrains Mono, monospace" font-size="10">int age = 30</text>
+
+          <rect x="40" y="184" width="240" height="40" rx="6" fill="none" stroke="#2b5f59" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="160" y="208" text-anchor="middle" fill="#6b7d70" font-family="JetBrains Mono, monospace" font-size="10">next frame pushed here ↓</text>
+
+          <text x="160" y="252" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10.5">Per-thread · LIFO · no GC · fast</text>
+
+          <!-- Arrow -->
+          <line x1="300" y1="86" x2="360" y2="86" stroke="#e8a33d" stroke-width="1.6" marker-end="url(#arrow)"/>
+          <text x="330" y="76" text-anchor="middle" fill="#e8a33d" font-family="JetBrains Mono, monospace" font-size="9">ref →</text>
+
+          <defs>
+            <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#e8a33d"/>
+            </marker>
+          </defs>
+
+          <!-- Heap side -->
+          <rect x="380" y="20" width="360" height="260" rx="10" fill="none" stroke="#7a5a26" stroke-width="1.5"/>
+          <text x="560" y="46" text-anchor="middle" fill="#e8a33d" font-family="JetBrains Mono, monospace" font-size="13" font-weight="600">HEAP</text>
+
+          <rect x="400" y="62" width="150" height="80" rx="6" fill="rgba(232,163,61,0.14)" stroke="#e8a33d" stroke-width="1"/>
+          <text x="475" y="82" text-anchor="middle" fill="#e9ede8" font-family="JetBrains Mono, monospace" font-size="11">Person object</text>
+          <text x="475" y="100" text-anchor="middle" fill="#9fb0a4" font-family="JetBrains Mono, monospace" font-size="10">name → [ref]</text>
+          <text x="475" y="116" text-anchor="middle" fill="#9fb0a4" font-family="JetBrains Mono, monospace" font-size="10">age = 30</text>
+          <text x="475" y="132" text-anchor="middle" fill="#9fb0a4" font-family="JetBrains Mono, monospace" font-size="10">hdr: hash, GC bits</text>
+
+          <line x1="500" y1="102" x2="600" y2="102" stroke="#e8a33d" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+          <rect x="600" y="70" width="120" height="64" rx="6" fill="rgba(232,163,61,0.08)" stroke="#7a5a26" stroke-width="1"/>
+          <text x="660" y="94" text-anchor="middle" fill="#e9ede8" font-family="JetBrains Mono, monospace" font-size="11">"Alice"</text>
+          <text x="660" y="112" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="9">(string pool)</text>
+
+          <text x="560" y="252" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10.5">Shared across threads · GC-managed · objects live here</text>
+        </svg>
+        <div class="cap">The variable <code class="inline">p</code> is a reference sitting on the stack; the object it points to — and everything inside it — lives on the heap.</div>
+      </div>
+
+      <div class="two-col">
+        <div class="callout">
+          <b>Stack</b> — one per thread. Holds method call frames: locals, parameters, return address. Grows/shrinks automatically, LIFO. No garbage collector involved. Too deep → <code class="inline">StackOverflowError</code>.
+        </div>
+        <div class="callout">
+          <b>Heap</b> — one per JVM, shared by all threads. Every <code class="inline">new</code> lands here. Managed entirely by the Garbage Collector. Full → <code class="inline">OutOfMemoryError</code>.
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ Q130 new keyword ============ -->
+    <section class="chapter" id="new-keyword">
+      <div class="kicker"><span class="num">Q130</span><span class="tag">Object Lifecycle</span></div>
+      <h2>What happens when you write <code class="inline">new</code></h2>
+      <p class="subtitle">Five steps, every time — but the JVM makes step 2 nearly free with a trick called TLAB.</p>
+
+      <pre>Person p = new Person("Alice", 30);</pre>
+
+      <div class="diagram">
+        <svg viewBox="0 0 800 170" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+          <defs>
+            <marker id="arrow2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#6b7d70"/>
+            </marker>
+          </defs>
+          <!-- 5 step boxes -->
+          <g font-family="IBM Plex Sans, sans-serif">
+            <rect x="10" y="30" width="145" height="90" rx="8" fill="rgba(122,147,201,0.12)" stroke="#7a93c9"/>
+            <text x="82" y="52" text-anchor="middle" fill="#7a93c9" font-size="11" font-weight="600">1. Class load</text>
+            <text x="82" y="72" text-anchor="middle" fill="#9fb0a4" font-size="9.5">Metaspace has</text>
+            <text x="82" y="86" text-anchor="middle" fill="#9fb0a4" font-size="9.5">Person's metadata?</text>
+            <text x="82" y="100" text-anchor="middle" fill="#6b7d70" font-size="9">(only once ever)</text>
+
+            <rect x="170" y="30" width="145" height="90" rx="8" fill="rgba(232,163,61,0.14)" stroke="#e8a33d"/>
+            <text x="242" y="52" text-anchor="middle" fill="#e8a33d" font-size="11" font-weight="600">2. Allocate</text>
+            <text x="242" y="72" text-anchor="middle" fill="#9fb0a4" font-size="9.5">Space carved out</text>
+            <text x="242" y="86" text-anchor="middle" fill="#9fb0a4" font-size="9.5">in Eden (via TLAB)</text>
+            <text x="242" y="100" text-anchor="middle" fill="#6b7d70" font-size="9">~pointer bump, fast</text>
+
+            <rect x="330" y="30" width="145" height="90" rx="8" fill="rgba(217,105,95,0.10)" stroke="#d9695f"/>
+            <text x="402" y="52" text-anchor="middle" fill="#d9695f" font-size="11" font-weight="600">3. Zero out</text>
+            <text x="402" y="72" text-anchor="middle" fill="#9fb0a4" font-size="9.5">name = null</text>
+            <text x="402" y="86" text-anchor="middle" fill="#9fb0a4" font-size="9.5">age = 0</text>
+            <text x="402" y="100" text-anchor="middle" fill="#6b7d70" font-size="9">before ctor runs</text>
+
+            <rect x="490" y="30" width="145" height="90" rx="8" fill="rgba(73,184,174,0.12)" stroke="#49b8ae"/>
+            <text x="562" y="52" text-anchor="middle" fill="#49b8ae" font-size="11" font-weight="600">4. Constructor</text>
+            <text x="562" y="72" text-anchor="middle" fill="#9fb0a4" font-size="9.5">name = "Alice"</text>
+            <text x="562" y="86" text-anchor="middle" fill="#9fb0a4" font-size="9.5">age = 30</text>
+            <text x="562" y="100" text-anchor="middle" fill="#6b7d70" font-size="9">your code executes</text>
+
+            <rect x="650" y="30" width="145" height="90" rx="8" fill="rgba(233,237,232,0.06)" stroke="#e9ede8"/>
+            <text x="722" y="52" text-anchor="middle" fill="#e9ede8" font-size="11" font-weight="600">5. Bind ref</text>
+            <text x="722" y="72" text-anchor="middle" fill="#9fb0a4" font-size="9.5">p → [heap addr]</text>
+            <text x="722" y="86" text-anchor="middle" fill="#9fb0a4" font-size="9.5">stored on stack</text>
+            <text x="722" y="100" text-anchor="middle" fill="#6b7d70" font-size="9">usable now</text>
+          </g>
+          <line x1="155" y1="75" x2="168" y2="75" stroke="#6b7d70" stroke-width="1.4" marker-end="url(#arrow2)"/>
+          <line x1="315" y1="75" x2="328" y2="75" stroke="#6b7d70" stroke-width="1.4" marker-end="url(#arrow2)"/>
+          <line x1="475" y1="75" x2="488" y2="75" stroke="#6b7d70" stroke-width="1.4" marker-end="url(#arrow2)"/>
+          <line x1="635" y1="75" x2="648" y2="75" stroke="#6b7d70" stroke-width="1.4" marker-end="url(#arrow2)"/>
+        </svg>
+      </div>
+
+      <h4>Why step 2 is nearly free</h4>
+      <p>Each thread owns a private slice of Eden called a <b>TLAB (Thread-Local Allocation Buffer)</b>. Allocating inside it needs no lock — it's just bumping a pointer forward, since no other thread can touch that slice. Only when the TLAB fills up does the JVM grab a fresh one or fall back to synchronized allocation.</p>
+
+      <div class="callout">
+        <b>Interview trap:</b> "Is <code class="inline">new</code> always slow?" — No. TLAB allocation is typically as cheap as stack allocation. Very large objects (big arrays) can skip Young Gen entirely and go straight to Old Gen — this is <i>large object allocation</i>, and it defeats the "objects die young" assumption GC tuning normally relies on.
+      </div>
+    </section>
+
+    <!-- ============ Q126 Strings ============ -->
+    <section class="chapter" id="strings">
+      <div class="kicker"><span class="num">Q126</span><span class="tag">Strings &amp; References</span></div>
+      <h2>How strings are represented in memory</h2>
+      <p class="subtitle">A String is a heap object wrapping a byte array — plus a pooling trick that saves memory.</p>
+
+      <pre>String a = "cat";        <span class="c1">// literal → String Pool</span>
+String b = "cat";        <span class="c1">// same pool reference</span>
+String c = new String("cat"); <span class="c1">// forces a new heap object</span>
+
+a == b   <span class="c1">// true  — same object</span>
+a == c   <span class="c1">// false — different objects</span>
+a.equals(c) <span class="c1">// true — same content</span></pre>
+
+      <div class="diagram">
+        <svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+          <text x="20" y="26" fill="#9fb0a4" font-family="JetBrains Mono, monospace" font-size="11">STACK</text>
+          <text x="220" y="26" fill="#e8a33d" font-family="JetBrains Mono, monospace" font-size="11">HEAP — String Pool</text>
+          <text x="560" y="26" fill="#6b7d70" font-family="JetBrains Mono, monospace" font-size="11">HEAP — regular objects</text>
+
+          <rect x="20" y="40" width="150" height="140" rx="8" fill="none" stroke="#263229"/>
+          <g font-family="JetBrains Mono, monospace" font-size="11" fill="#49b8ae">
+            <text x="35" y="66">a →</text>
+            <text x="35" y="96">b →</text>
+            <text x="35" y="126">c →</text>
+          </g>
+
+          <rect x="220" y="70" width="140" height="50" rx="8" fill="rgba(232,163,61,0.16)" stroke="#e8a33d"/>
+          <text x="290" y="100" text-anchor="middle" fill="#e9ede8" font-family="JetBrains Mono, monospace" font-size="12">"cat"</text>
+
+          <rect x="560" y="120" width="140" height="50" rx="8" fill="rgba(107,125,112,0.10)" stroke="#6b7d70"/>
+          <text x="630" y="150" text-anchor="middle" fill="#e9ede8" font-family="JetBrains Mono, monospace" font-size="12">"cat" (copy)</text>
+
+          <path d="M170,66 C195,66 195,95 220,95" stroke="#49b8ae" fill="none" stroke-width="1.4" marker-end="url(#arrow3)"/>
+          <path d="M170,96 C195,96 195,95 220,95" stroke="#49b8ae" fill="none" stroke-width="1.4" marker-end="url(#arrow3)"/>
+          <path d="M170,126 C400,126 400,145 560,145" stroke="#6b7d70" fill="none" stroke-width="1.4" marker-end="url(#arrow3)"/>
+
+          <defs>
+            <marker id="arrow3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+              <path d="M0,0 L6,3 L0,6 Z" fill="#6b7d70"/>
+            </marker>
+          </defs>
+
+          <text x="290" y="190" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10">a and b share one pooled object</text>
+          <text x="630" y="190" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10">c bypasses the pool entirely</text>
+        </svg>
+      </div>
+
+      <h4>Internal representation</h4>
+      <table>
+        <tr><th>Field</th><th>Purpose</th></tr>
+        <tr><td><code class="inline">byte[] value</code></td><td>The actual character data (was <code class="inline">char[]</code> before Java 9)</td></tr>
+        <tr><td><code class="inline">byte coder</code></td><td>Flags whether bytes are LATIN1 (1 byte/char) or UTF16 (2 bytes/char)</td></tr>
+        <tr><td><code class="inline">int hash</code></td><td>Cached hashcode — computed once, safe to cache because Strings are immutable</td></tr>
+      </table>
+
+      <h4>Why it matters</h4>
+      <p><b>Compact Strings (Java 9+):</b> if a string is pure Latin-1 (basically ASCII), it's stored at 1 byte/char instead of 2 — roughly halving memory for the huge majority of real-world text.</p>
+      <p><b>Immutability enables pooling:</b> since a String can never be mutated after construction, it's safe for many variables to silently share the same object — nobody can corrupt it for anyone else. This is also why Strings are safe <code class="inline">HashMap</code> keys (hashcode never changes) and inherently thread-safe (no write ever happens, so concurrent reads never race).</p>
+      <p><b>Pool location:</b> lived in PermGen before Java 7; moved into the regular heap in Java 7+, which is bigger and resizable — removing a common <code class="inline">OutOfMemoryError: PermGen space</code> cause from over-interning.</p>
+    </section>
+
+    <!-- ============ Q129 References ============ -->
+    <section class="chapter" id="references">
+      <div class="kicker"><span class="num">Q129</span><span class="tag">Strings &amp; References</span></div>
+      <h2>Strong, Soft, Weak &amp; Phantom references</h2>
+      <p class="subtitle">Four levels of "how eagerly can the GC take this away from me."</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 780 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+          <line x1="60" y1="100" x2="720" y2="100" stroke="#263229" stroke-width="2"/>
+          <g font-family="IBM Plex Sans, sans-serif" text-anchor="middle">
+            <circle cx="100" cy="100" r="9" fill="#49b8ae"/>
+            <text x="100" y="70" fill="#49b8ae" font-size="12" font-weight="600">Strong</text>
+            <text x="100" y="130" fill="#9fb0a4" font-size="9.5">never collected</text>
+            <text x="100" y="145" fill="#9fb0a4" font-size="9.5">while reachable</text>
+
+            <circle cx="280" cy="100" r="9" fill="#e8c15f"/>
+            <text x="280" y="70" fill="#e8c15f" font-size="12" font-weight="600">Soft</text>
+            <text x="280" y="130" fill="#9fb0a4" font-size="9.5">cleared only under</text>
+            <text x="280" y="145" fill="#9fb0a4" font-size="9.5">memory pressure</text>
+
+            <circle cx="480" cy="100" r="9" fill="#e8a33d"/>
+            <text x="480" y="70" fill="#e8a33d" font-size="12" font-weight="600">Weak</text>
+            <text x="480" y="130" fill="#9fb0a4" font-size="9.5">cleared at the very</text>
+            <text x="480" y="145" fill="#9fb0a4" font-size="9.5">next GC cycle</text>
+
+            <circle cx="680" cy="100" r="9" fill="#d9695f"/>
+            <text x="680" y="70" fill="#d9695f" font-size="12" font-weight="600">Phantom</text>
+            <text x="680" y="130" fill="#9fb0a4" font-size="9.5">.get() always null —</text>
+            <text x="680" y="145" fill="#9fb0a4" font-size="9.5">notification only</text>
+          </g>
+          <text x="400" y="185" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10.5">← harder to keep alive · easier for GC to reclaim →</text>
+        </svg>
+      </div>
+
+      <table>
+        <tr><th>Type</th><th>Collected when?</th><th>.get() behavior</th><th>Real use case</th></tr>
+        <tr><td><span class="chip stack">Strong</span></td><td>Never, while reachable</td><td>Always returns object</td><td>Normal everyday code</td></tr>
+        <tr><td><span class="chip heap">Soft</span></td><td>Only under memory pressure</td><td>Object or null</td><td>Memory-sensitive caches</td></tr>
+        <tr><td><span class="chip heap">Weak</span></td><td>Next GC cycle, no strong refs</td><td>Object or null</td><td><code class="inline">WeakHashMap</code>, listener leak prevention</td></tr>
+        <tr><td><span class="chip meta">Phantom</span></td><td>After finalization, pre-reclaim</td><td>Always null</td><td>Post-GC cleanup hooks (<code class="inline">Cleaner</code>)</td></tr>
+      </table>
+
+      <pre><span class="c1">// Soft — cache that survives until memory is genuinely tight</span>
+SoftReference&lt;byte[]&gt; cache = new SoftReference&lt;&gt;(loadBigData());
+
+<span class="c1">// Weak — entry vanishes automatically once key has no strong refs</span>
+WeakHashMap&lt;Key, Value&gt; sessionMap = new WeakHashMap&lt;&gt;();
+
+<span class="c1">// Phantom — pure "it's really gone now" notification, feeds Cleaner</span>
+ReferenceQueue&lt;Resource&gt; queue = new ReferenceQueue&lt;&gt;();
+PhantomReference&lt;Resource&gt; ref = new PhantomReference&lt;&gt;(resource, queue);</pre>
+
+      <div class="callout">
+        <b>Why Phantom matters today:</b> it's the exact mechanism <code class="inline">java.lang.ref.Cleaner</code> is built on. Since <code class="inline">.get()</code> is always null, there's no way to accidentally re-establish a strong reference — resurrection (see Q127) is structurally impossible.
+      </div>
+    </section>
+
+    <!-- ============ Q127 finalize ============ -->
+    <section class="chapter" id="finalize">
+      <div class="kicker"><span class="num">Q127</span><span class="tag">Object Lifecycle</span></div>
+      <h2>Resurrection &amp; the death of <code class="inline">finalize()</code></h2>
+      <p class="subtitle">Yes, an object can come back from the dead — exactly once. Here's why nobody should rely on it.</p>
+
+      <h4>The resurrection trick</h4>
+      <pre>class Resource {
+    static Resource resurrected;
+
+    @Override
+    protected void finalize() throws Throwable {
+        resurrected = this;  <span class="c1">// self-assign to a GC root → reachable again</span>
+    }
+}</pre>
+      <p>When an object becomes unreachable, the JVM calls <code class="inline">finalize()</code> once before reclaiming it. If, inside that call, the object assigns itself to something GC considers a root (like a <code class="inline">static</code> field), it becomes reachable again. But the JVM tracks that <code class="inline">finalize()</code> already ran — so the second time it becomes garbage, it's collected silently, no second chance.</p>
+
+      <h4>Only classes that override it get enrolled</h4>
+      <div class="callout">
+        Every class inherits an empty <code class="inline">finalize()</code> from <code class="inline">Object</code>. If your class doesn't override it with real logic, the JVM detects this at class-load time and <b>skips the entire finalization mechanism</b> for that class — the object is collected in one normal pass, no queue, no extra thread, no delay. Only classes that meaningfully override it get the special (slow) treatment below.
+      </div>
+
+      <h4>How it actually runs, step by step</h4>
+      <ol style="color:#d7ddd6;">
+        <li>Object constructed → wrapped in an internal <code class="inline">Finalizer</code> reference, registered on an internal queue.</li>
+        <li>GC finds it unreachable → instead of reclaiming immediately, moves it to a <b>finalization queue</b>.</li>
+        <li>A dedicated, low-priority background <b>Finalizer thread</b> pulls it off the queue and calls <code class="inline">finalize()</code> — timing entirely unpredictable.</li>
+        <li>Only after that completes (and no resurrection happened) is the object actually reclaimed, usually in a subsequent GC cycle.</li>
+      </ol>
+
+      <h4>Why it was ever used — and why not anymore</h4>
+      <p><code class="inline">finalize()</code> was meant as a safety net for <b>OS-level resources</b> GC itself can't see — file descriptors, sockets, native/off-heap memory, DB connections. GC only reclaims Java heap memory; it has zero visibility into what the OS is holding open on your process's behalf.</p>
+      <p>The problem: GC's own trigger time is already unpredictable (memory-pressure driven, not scheduled), and on top of that, the Finalizer thread adds a second, independent layer of unpredictable delay. A file or connection might stay open far longer than intended — and if the JVM shuts down abruptly, <code class="inline">finalize()</code> might never run at all.</p>
+
+      <div class="callout warn">
+        <b>Status:</b> Deprecated since Java 9. Marked <code class="inline">forRemoval = true</code> since Java 18 — meaning a future JDK is expected to delete it entirely, not just discourage it. Code relying on it today is building on borrowed time.
+      </div>
+
+      <h4>What replaced it</h4>
+      <table>
+        <tr><th>Tool</th><th>Determinism</th><th>Use it for</th></tr>
+        <tr><td><code class="inline">try-with-resources</code></td><td>Fully deterministic — runs at an exact line</td><td>Primary, everyday resource cleanup</td></tr>
+        <tr><td><code class="inline">java.lang.ref.Cleaner</code> (Java 9+)</td><td>Still GC-tied, but built on PhantomReference — no resurrection risk</td><td>Rare safety-net cleanup if <code class="inline">close()</code> was forgotten</td></tr>
+      </table>
+    </section>
+
+    <!-- ============ try-with-resources ============ -->
+    <section class="chapter" id="try-with-resources">
+      <div class="kicker"><span class="num">§</span><span class="tag">Object Lifecycle</span></div>
+      <h2>try-with-resources</h2>
+      <p class="subtitle">Not a keyword — a pattern: parentheses right after <code class="inline">try</code>. Introduced in Java 7.</p>
+
+      <pre>try (Connection conn = dataSource.getConnection();
+     PreparedStatement stmt = conn.prepareStatement(sql);
+     ResultSet rs = stmt.executeQuery()) {
+
+    while (rs.next()) { <span class="c1">/* process row */</span> }
+
+} catch (SQLException e) {
+    <span class="c1">// handle it</span>
+}
+<span class="c1">// rs, stmt, conn all closed automatically — in reverse order</span></pre>
+
+      <div class="callout">
+        <b>The exact rule:</b> <code class="inline">close()</code> is called for every resource that was <i>successfully constructed</i> — regardless of what happens afterward (exception, return, normal exit). If construction itself throws, that particular resource never existed, so there's nothing to close.
+      </div>
+
+      <h4>Where it shows up in real code</h4>
+      <table>
+        <tr><td>File I/O</td><td><code class="inline">BufferedReader</code>, <code class="inline">FileInputStream</code></td></tr>
+        <tr><td>Databases</td><td><code class="inline">Connection</code>, <code class="inline">PreparedStatement</code>, <code class="inline">ResultSet</code> — the most common real-world use</td></tr>
+        <tr><td>Networking</td><td><code class="inline">Socket</code>, stream wrappers around it</td></tr>
+        <tr><td>Streams</td><td><code class="inline">Files.lines(...)</code></td></tr>
+        <tr><td>Custom types</td><td>Anything implementing <code class="inline">AutoCloseable</code> yourself</td></tr>
+      </table>
+      <p>Any class implementing <code class="inline">AutoCloseable</code> (or the older <code class="inline">Closeable</code>) can go inside the parentheses — JDK classes already implement it; for your own classes, you implement it and define what <code class="inline">close()</code> does.</p>
+    </section>
+
+    <!-- ============ Q128 GC defaults ============ -->
+    <section class="chapter" id="gc-defaults">
+      <div class="kicker"><span class="num">Q128</span><span class="tag">Garbage Collectors</span></div>
+      <h2>Default collector, by Java version</h2>
+      <p class="subtitle">Know which default your production JVM actually runs — many banks still run Java 8.</p>
+
+      <table>
+        <tr><th>Version</th><th>Default collector</th><th>Philosophy</th></tr>
+        <tr><td>Java 7 and earlier</td><td>Parallel GC</td><td>Maximize throughput</td></tr>
+        <tr><td>Java 8</td><td>Parallel GC</td><td>Maximize throughput (still widely deployed today)</td></tr>
+        <tr><td>Java 9 – 17</td><td>G1 GC</td><td>Balance pause time + throughput</td></tr>
+        <tr><td>Java 18+</td><td>G1 GC (default) — ZGC / Shenandoah available</td><td>G1 balanced; ZGC/Shenandoah for ultra-low latency</td></tr>
+      </table>
+
+      <div class="callout">
+        <b>Interview trap:</b> "CMS is still available, right?" — No. Deprecated Java 9, <b>removed entirely in Java 14</b>. It never compacted memory, causing fragmentation; G1 replaced it by doing everything CMS did, plus compaction.
+      </div>
+    </section>
+
+    <!-- ============ Q131 GC types ============ -->
+    <section class="chapter" id="gc-types">
+      <div class="kicker"><span class="num">Q131</span><span class="tag">Garbage Collectors</span></div>
+      <h2>The collectors themselves</h2>
+      <p class="subtitle">Same underlying job — reclaim unreachable objects — with very different tradeoffs on pause time vs. throughput.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 780 200" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+          <line x1="40" y1="160" x2="740" y2="160" stroke="#263229" stroke-width="1.5"/>
+          <text x="40" y="180" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10">throughput-first</text>
+          <text x="700" y="180" text-anchor="end" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="10">latency-first</text>
+
+          <!-- bars: height = relative pause time, inverse of latency-focus -->
+          <g font-family="IBM Plex Sans, sans-serif" text-anchor="middle">
+            <rect x="70" y="40" width="70" height="120" rx="4" fill="rgba(217,105,95,0.5)"/>
+            <text x="105" y="30" fill="#e9ede8" font-size="11">Serial</text>
+
+            <rect x="180" y="55" width="70" height="105" rx="4" fill="rgba(217,105,95,0.4)"/>
+            <text x="215" y="45" fill="#e9ede8" font-size="11">Parallel</text>
+
+            <rect x="290" y="85" width="70" height="75" rx="4" fill="rgba(232,163,61,0.5)"/>
+            <text x="325" y="75" fill="#e9ede8" font-size="11">CMS†</text>
+
+            <rect x="400" y="100" width="70" height="60" rx="4" fill="rgba(232,193,95,0.6)"/>
+            <text x="435" y="90" fill="#e9ede8" font-size="11">G1</text>
+
+            <rect x="510" y="130" width="70" height="30" rx="4" fill="rgba(73,184,174,0.6)"/>
+            <text x="545" y="120" fill="#e9ede8" font-size="11">Shenandoah</text>
+
+            <rect x="620" y="132" width="70" height="28" rx="4" fill="rgba(73,184,174,0.7)"/>
+            <text x="655" y="122" fill="#e9ede8" font-size="11">ZGC</text>
+          </g>
+          <text x="400" y="15" text-anchor="middle" fill="#6b7d70" font-family="IBM Plex Sans, sans-serif" font-size="9.5">bar height ≈ typical stop-the-world pause (illustrative, not to scale) · † removed in Java 14</text>
+        </svg>
+      </div>
+
+      <h4>Serial GC</h4>
+      <p>Single thread, full stop-the-world. Simplest possible collector — no coordination overhead. Fits small heaps / single-CPU machines where long pauses don't hurt anyone.</p>
+
+      <h4>Parallel GC (Throughput Collector)</h4>
+      <p>Multiple threads do the same stop-the-world work faster than Serial, but application is still fully frozen throughout. Optimized to minimize the <i>percentage of total time</i> spent in GC, not any single pause. Fits batch jobs, overnight settlement runs.</p>
+
+      <h4>CMS (Concurrent Mark-Sweep) — removed in Java 14</h4>
+      <p>First mainstream low-pause collector: marked concurrently with the app, pausing only briefly. Fatal flaw: never compacted, so fragmentation built up over time, occasionally forcing the worst possible pause — a full stop-the-world compaction, often when memory was already tight.</p>
+
+      <h4>G1 GC (Garbage-First)</h4>
+      <p>Splits the heap into ~2000 equal-sized regions, any of which can play Eden/Survivor/Old dynamically. Prioritizes collecting regions with the most reclaimable garbage first, and <i>does</i> compact — no CMS-style fragmentation. You can set a target: <code class="inline">-XX:MaxGCPauseMillis=200</code>.</p>
+
+      <h4>ZGC &amp; Shenandoah</h4>
+      <p>Sub-millisecond pauses regardless of heap size (tested to multi-terabyte heaps), by doing almost all marking/relocating/reference-updating concurrently with the app. ZGC uses colored pointers + load barriers; Shenandoah uses Brooks pointers. Built for real-time trading engines and strict-SLA systems.</p>
+
+      <div class="callout">
+        <b>Decision framework:</b> small heap / simplicity → Serial · maximize total throughput → Parallel · balanced general purpose → G1 (default) · ultra-low latency, huge heap → ZGC or Shenandoah.
+      </div>
+    </section>
+
+    <!-- ============ Q134 Memory Areas ============ -->
+    <section class="chapter" id="memory-areas">
+      <div class="kicker"><span class="num">Q134</span><span class="tag">Memory Areas</span></div>
+      <h2>All the areas of JVM memory</h2>
+      <p class="subtitle">Not just "heap and stack" — the complete map splits into shared vs. per-thread regions.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 760 240" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+          <rect x="20" y="20" width="340" height="200" rx="10" fill="none" stroke="#7a5a26" stroke-width="1.5"/>
+          <text x="190" y="42" text-anchor="middle" fill="#e8a33d" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600">SHARED (once per JVM)</text>
+
+          <rect x="40" y="56" width="300" height="70" rx="6" fill="rgba(232,163,61,0.14)" stroke="#e8a33d"/>
+          <text x="190" y="80" text-anchor="middle" fill="#e9ede8" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600">1. Heap</text>
+          <text x="190" y="98" text-anchor="middle" fill="#9fb0a4" font-family="IBM Plex Sans, sans-serif" font-size="10">Objects &amp; arrays. GC-managed.</text>
+          <text x="190" y="113" text-anchor="middle" fill="#9fb0a4" font-family="IBM Plex Sans, sans-serif" font-size="10">Young Gen (Eden+Survivor) + Old Gen</text>
+
+          <rect x="40" y="136" width="300" height="66" rx="6" fill="rgba(122,147,201,0.12)" stroke="#7a93c9"/>
+          <text x="190" y="158" text-anchor="middle" fill="#e9ede8" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600">2. Method Area / Metaspace</text>
+          <text x="190" y="176" text-anchor="middle" fill="#9fb0a4" font-family="IBM Plex Sans, sans-serif" font-size="10">Class bytecode, constant pool,</text>
+          <text x="190" y="190" text-anchor="middle" fill="#9fb0a4" font-family="IBM Plex Sans, sans-serif" font-size="10">static fields — native memory since Java 8</text>
+
+          <rect x="400" y="20" width="340" height="200" rx="10" fill="none" stroke="#2b5f59" stroke-width="1.5"/>
+          <text x="570" y="42" text-anchor="middle" fill="#49b8ae" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600">PER-THREAD (one set each)</text>
+
+          <rect x="420" y="56" width="300" height="46" rx="6" fill="rgba(73,184,174,0.12)" stroke="#49b8ae"/>
+          <text x="570" y="84" text-anchor="middle" fill="#e9ede8" font-family="IBM Plex Sans, sans-serif" font-size="11.5">3. Stack — locals, params, frames</text>
+
+          <rect x="420" y="112" width="300" height="42" rx="6" fill="rgba(73,184,174,0.10)" stroke="#2b5f59"/>
+          <text x="570" y="138" text-anchor="middle" fill="#e9ede8" font-family="IBM Plex Sans, sans-serif" font-size="11.5">4. PC Register — current instruction addr</text>
+
+          <rect x="420" y="164" width="300" height="42" rx="6" fill="rgba(73,184,174,0.08)" stroke="#2b5f59"/>
+          <text x="570" y="190" text-anchor="middle" fill="#e9ede8" font-family="IBM Plex Sans, sans-serif" font-size="11.5">5. Native Method Stack — JNI calls</text>
+        </svg>
+      </div>
+
+      <div class="callout">
+        <b>The trap most people fall into:</b> stopping at "Heap and Stack." The real conceptual split is <b>shared vs. per-thread</b>, and only Heap (+ Metaspace, via class unloading) is touched by garbage collection — Stack, PC Register, and Native Method Stack are managed automatically by call/return mechanics, with zero GC involvement.
+      </div>
+
+      <table>
+        <tr><th>Full &amp; then Errors</th><th></th></tr>
+        <tr><td>Heap full</td><td><code class="inline">OutOfMemoryError: Java heap space</code></td></tr>
+        <tr><td>Metaspace full</td><td><code class="inline">OutOfMemoryError: Metaspace</code></td></tr>
+        <tr><td>Stack too deep (runaway recursion)</td><td><code class="inline">StackOverflowError</code></td></tr>
+      </table>
+    </section>
+
+    <!-- ============ Q135 Allocation ============ -->
+    <section class="chapter" id="allocation">
+      <div class="kicker"><span class="num">Q135</span><span class="tag">Memory Areas</span></div>
+      <h2>How memory gets allocated in each area</h2>
+      <table>
+        <tr><th>Area</th><th>Allocated</th><th>Configured via</th></tr>
+        <tr><td>Heap</td><td>Dynamically at runtime, on every <code class="inline">new</code> (often via per-thread TLABs for speed)</td><td><code class="inline">-Xms</code> / <code class="inline">-Xmx</code></td></tr>
+        <tr><td>Stack</td><td>Per-thread, at thread creation — frames pushed/popped automatically</td><td><code class="inline">-Xss</code></td></tr>
+        <tr><td>Metaspace</td><td>Starts small, grows dynamically as classes load, from native memory</td><td><code class="inline">-XX:MaxMetaspaceSize</code> (unbounded by default)</td></tr>
+      </table>
+      <div class="callout">Heap allocation is GC-managed and per-object; stack allocation is fast and scoped to a method call's lifetime; Metaspace allocation is dynamic but scoped to class-loading lifetime, not individual objects.</div>
+    </section>
+
+    <!-- ============ Q136 Leaks ============ -->
+    <section class="chapter" id="leaks">
+      <div class="kicker"><span class="num">Q136</span><span class="tag">Leaks &amp; Monitoring</span></div>
+      <h2>Memory leaks — with a garbage collector?</h2>
+      <p class="subtitle">GC only reclaims what's <i>unreachable</i>. A Java "leak" is really an accidental, lingering reference.</p>
+
+      <h4>Common real causes</h4>
+      <table>
+        <tr><th>Cause</th><th>Why it leaks</th></tr>
+        <tr><td>Static collections</td><td><code class="inline">static</code> fields are GC roots — live for the app's entire lifetime; items added but never removed grow forever</td></tr>
+        <tr><td>Unclosed resources</td><td>Connection pool exhausts even though heap looks fine</td></tr>
+        <tr><td>Listeners never unregistered</td><td>Registry keeps the whole object graph alive long after it's logically done</td></tr>
+        <tr><td>Non-static inner classes</td><td>Implicitly hold a hidden reference to the enclosing instance — keeps it alive if the inner object outlives it</td></tr>
+        <tr><td><code class="inline">ThreadLocal</code> not removed</td><td>Pooled threads never die — value stays attached forever unless <code class="inline">.remove()</code> is called</td></tr>
+      </table>
+
+      <pre><span class="c1">// Non-static inner class leak</span>
+class OuterService {
+    private byte[] bigData = new byte[100_000_000];
+    class InnerTask implements Runnable {   <span class="c1">// implicit ref to OuterService.this</span>
+        public void run() { /* work */ }
+    }
+    Runnable getTask() { return new InnerTask(); }  <span class="c1">// leaks bigData if handed off long-term</span>
+}
+
+<span class="c1">// ThreadLocal leak in a pooled-thread server</span>
+threadLocal.set(new ExpensiveObject());
+<span class="c1">// ... forgot: threadLocal.remove();</span></pre>
+
+      <h4>Prevention map</h4>
+      <table>
+        <tr><td>Static growing collections</td><td>Eviction/expiry logic, or bounded caches (Caffeine, Guava)</td></tr>
+        <tr><td>Unclosed resources</td><td>Always <code class="inline">try-with-resources</code></td></tr>
+        <tr><td>Listener leaks</td><td>Weak-referenced listener lists, explicit unregister in lifecycle hooks</td></tr>
+        <tr><td>Inner class refs</td><td>Prefer <code class="inline">static</code> nested classes unless outer instance is truly needed</td></tr>
+        <tr><td><code class="inline">ThreadLocal</code></td><td>Always <code class="inline">.remove()</code> in a <code class="inline">finally</code> block</td></tr>
+      </table>
+
+      <div class="callout">
+        <b>How to actually find one in production:</b> take a heap dump (<code class="inline">-XX:+HeapDumpOnOutOfMemoryError</code>), load it in <b>Eclipse MAT</b>, run the Leak Suspects report / dominator tree to find unexpectedly large retained-size objects, then trace the GC root path back to find what's holding the reference.
+      </div>
+    </section>
+
+    <!-- ============ Q137 Metaspace ============ -->
+    <section class="chapter" id="metaspace">
+      <div class="kicker"><span class="num">Q137</span><span class="tag">Memory Areas</span></div>
+      <h2>Metaspace vs. PermGen</h2>
+      <table>
+        <tr><th></th><th>PermGen (pre-Java 8)</th><th>Metaspace (Java 8+)</th></tr>
+        <tr><td>Location</td><td>Fixed heap-adjacent region</td><td>Native (off-heap) memory</td></tr>
+        <tr><td>Sizing</td><td>Fixed max (<code class="inline">-XX:MaxPermSize</code>), often small</td><td>Grows dynamically, uncapped by default</td></tr>
+        <tr><td>Common failure</td><td><code class="inline">OutOfMemoryError: PermGen space</code> from heavy class generation</td><td>Unbounded native memory growth if a ClassLoader leak exists</td></tr>
+      </table>
+      <p><b>One line:</b> Metaspace replaced PermGen by moving class metadata to dynamically-resizable native memory, eliminating the classic PermGen OOM — at the cost of a new, harder-to-spot native memory growth risk if left uncapped.</p>
+    </section>
+
+    <!-- ============ Q138 Monitoring ============ -->
+    <section class="chapter" id="monitoring">
+      <div class="kicker"><span class="num">Q138</span><span class="tag">Leaks &amp; Monitoring</span></div>
+      <h2>Monitoring GC activity</h2>
+      <table>
+        <tr><th>Tool</th><th>Best for</th></tr>
+        <tr><td><code class="inline">-Xlog:gc*</code></td><td>The source of truth — timestamped log of every GC event</td></tr>
+        <tr><td><code class="inline">jstat -gcutil &lt;pid&gt; 1000</code></td><td>Lightweight live check over SSH, no GUI</td></tr>
+        <tr><td>VisualVM + Visual GC plugin</td><td>Watching heap regions fill/collect live, visually</td></tr>
+        <tr><td>JFR + Java Mission Control</td><td>Low-overhead (&lt;1%), safe to run continuously in production</td></tr>
+        <tr><td>GCViewer / GCEasy</td><td>Offline log analysis, pause-time trends, tuning suggestions</td></tr>
+      </table>
+    </section>
+
+    <!-- ============ Q139 Heap size ============ -->
+    <section class="chapter" id="heap-size">
+      <div class="kicker"><span class="num">Q139</span><span class="tag">Leaks &amp; Monitoring</span></div>
+      <h2>Is heap size fixed?</h2>
+      <p>No — configurable and elastic between <code class="inline">-Xms</code> (initial) and <code class="inline">-Xmx</code> (max). The OS grants the JVM process virtual memory up to <code class="inline">-Xmx</code>; the JVM then internally divides that space among Eden/Survivor/Old Gen.</p>
+      <div class="callout">
+        <b>Production tuning note:</b> many teams set <code class="inline">-Xms</code> equal to <code class="inline">-Xmx</code> specifically to avoid runtime heap resizing, which itself causes extra pause time — trading a bit of "wasted" memory at startup for consistent, predictable GC pause behavior. Matters a lot where latency predictability is critical (e.g. trading systems).
+      </div>
+    </section>
+
+    <!-- ============ Q140 GC log parnew ============ -->
+    <section class="chapter" id="gc-log-parnew">
+      <div class="kicker"><span class="num">Q140</span><span class="tag">Reading GC Logs</span></div>
+      <h2>Reading a ParNew log line</h2>
+      <pre>[GC [ParNew: 1800K->90K(1800K), 0.0552314 secs] 22320K->20610K(65536K), 0.0553213 secs]
+[Times: user=0.04 sys=0.01, real=0.06 secs]</pre>
+      <table>
+        <tr><td>Collector</td><td><code class="inline">ParNew</code> — parallel, stop-the-world, young-gen-only (historically paired with CMS)</td></tr>
+        <tr><td>Young gen freed</td><td>1800K → 90K = <b>1710K reclaimed</b></td></tr>
+        <tr><td>Total heap change</td><td>22320K → 20610K = <b>1710K reclaimed</b> (matches — old gen untouched this cycle)</td></tr>
+        <tr><td>Pause time</td><td><code class="inline">real=0.06 secs</code> (~55ms) stop-the-world</td></tr>
+      </table>
+      <div class="callout">Numbers in parentheses are <b>total capacity</b>, not usage — <code class="inline">(1800K)</code> is young gen's total size; <code class="inline">(65536K)</code> is total heap capacity (64MB).</div>
+    </section>
+
+    <!-- ============ Q141 GC log g1 ============ -->
+    <section class="chapter" id="gc-log-g1">
+      <div class="kicker"><span class="num">Q141</span><span class="tag">Reading GC Logs</span></div>
+      <h2>Reading a G1 mixed-pause log</h2>
+      <pre>[GC pause (G1 Evacuation Pause) (mixed) 2048M->1024M(4096M), 0.1200000 secs]
+[GC pause (G1 Evacuation Pause) (mixed) 1024M->512M(4096M), 0.1100000 secs]</pre>
+      <p><b>"Mixed"</b> means G1 collected young regions <i>plus</i> a subset of old-gen regions with the most reclaimable garbage — its mechanism for avoiding old-style full-heap stop-the-world pauses.</p>
+      <p>Reading it: 2048M → 1024M = 1024M freed, out of 4096M total capacity, in a 120ms pause; second line frees another 512M in 110ms.</p>
+
+      <h4>Three levers to reduce these pauses</h4>
+      <table>
+        <tr><td><code class="inline">-XX:MaxGCPauseMillis=&lt;N&gt;</code></td><td>Lower it → G1 does more, smaller cycles instead of fewer, bigger ones</td></tr>
+        <tr><td><code class="inline">-XX:InitiatingHeapOccupancyPercent</code></td><td>Lower it (default 45%) → mixed GCs start earlier, with less accumulated garbage per cycle</td></tr>
+        <tr><td><code class="inline">-XX:G1HeapRegionSize</code></td><td>Smaller regions (power of 2: 4M/8M/16M/32M) → more granular, shorter pause increments</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      Compiled reference — Chapter 10: Java Memory Management. Covers Q126–Q141 plus foundational stack/heap concepts.
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Scroll-spy for the sidebar
+  const links = Array.from(document.querySelectorAll('nav.toc a'));
+  const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function onScroll(){
+    let current = sections[0];
+    for(const s of sections){
+      if (s.getBoundingClientRect().top - 120 <= 0) current = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + current.id));
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+</script>
+</body>
+</html>
